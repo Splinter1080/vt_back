@@ -143,7 +143,6 @@ app.post("/sell", async (req, res) => {
                 if (parseFloat(req.body.sellMoney) <= parseFloat(asset.amount * req.body.price)) {
                     asset.amount -= parseFloat(req.body.sellMoney / req.body.price);
                     asset.avgPrice = ((parseFloat(asset.avgPrice * asset.amount) - parseFloat(req.body.sellMoney)) / (asset.amount - req.body.amount));
-                    await asset.save();
                     user.balance += parseFloat(req.body.sellMoney);
                     res.send("Asset Sold");
                     return;
