@@ -19,7 +19,7 @@ const cors = require("cors");
 
 //----------------------
 const User = require('./models/users');
-const Asset = require('./models/asset');
+const Asset = require('./models/Asset');
 const Order = require('./models/orders');
 //------db connection-----
 const dbUrl = 'mongodb+srv://botstest1080:splinter1234@cluster0.aapex.mongodb.net/virtual_trader?retryWrites=true&w=majority';
