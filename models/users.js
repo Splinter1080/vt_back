@@ -23,6 +23,12 @@ const UserSchema = new Schema({
             ref: 'Asset'
         }
     ],
+    orders: [
+        {
+            type: Schema.Types.ObjectId,
+            ref: 'Order'
+        }
+    ],
     balance: Number,
     currentValue: Number
 });

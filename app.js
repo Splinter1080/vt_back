@@ -8,6 +8,7 @@ const passportLocal = require("passport-local").Strategy;
 const session = require('express-session');
 const cookieParser = require("cookie-parser");
 const bcrypt = require("bcryptjs");
+const axios = require("axios");
 
 const app = express()
 app.use(express.urlencoded({ extended: true }));
@@ -19,6 +20,7 @@ const cors = require("cors");
 //----------------------
 const User = require('./models/users');
 const Asset = require('./models/asset');
+const Order = require('./models/orders');
 //------db connection-----
 const dbUrl = 'mongodb+srv://botstest1080:splinter1234@cluster0.aapex.mongodb.net/virtual_trader?retryWrites=true&w=majority';
 
@@ -35,7 +37,10 @@ db.once("open", () => {
 //------session config--------
 app.use(
     cors({
-        origin: "http://localhost:3000", // <-- location of the react app were connecting to
+        origin:
+            "https://main--virtual-crypto-trader.netlify.app",
+
+        //origin: "http://localhost:3000", // <-- location of the react app were connecting to
         credentials: true,
     })
 );
@@ -68,7 +73,10 @@ app.post("/login", (req, res, next) => {
         else {
             req.logIn(user, (err) => {
                 if (err) throw err;
-                res.send("Successfully Authenticated");
+                res.send({
+                    success: true,
+                    username: user.username,
+                });
                 console.log(req.user);
             });
         }
@@ -93,12 +101,39 @@ app.post("/register", (req, res) => {
         }
     });
 });
-app.get("/user", (req, res) => {
-    res.send(req.user); // The req.user stores the entire user that has been authenticated inside of it.
+app.get("/user", async (req, res) => {
+    if (req.user) {
+
+        const user = await User.findOne({ _id: req.user._id }).populate('assets');
+        for (let i = 0; i < user.length; i++) {
+            user[i].currentValue = user[i].balance;
+            for (let j = 0; j < user[i].assets.length; j++) {
+                user[i].currentValue += user[i].assets[j].amount * user[i].assets[j].avgPrice;
+            }
+            await user[i].save();
+        }
+        console.log(user);
+        res.send({
+            loggedIn: true,
+            username: user.username,
+            assets: user.assets,
+            orders: user.orders,
+            balance: user.balance,
+            currentValue: user.currentValue,
+        })
+    }
+    else {
+        res.send({
+            loggedIn: false,
+        })
+    }
+    // The req.user stores the entire user that has been authenticated inside of it.
 });
 app.get('/logout', (req, res) => {
     req.logout(); //passport function
-    res.redirect('http://localhost:3000/login');
+    res.redirect('https://main--virtual-crypto-trader.netlify.app/');
+    //res.redirect('http://localhost:3000/'); //"https://main--iridescent-basbousa-14f4a4.netlify.app",
+
 })
 //------------buy and sell----------------
 app.post("/buy", async (req, res) => {
@@ -114,26 +149,113 @@ app.post("/buy", async (req, res) => {
                     const asset = await Asset.findOne({ coinName: req.body.coinName });
                     asset.avgPrice = ((parseFloat(asset.avgPrice * asset.amount) + parseFloat(req.body.investedValue)) / (req.body.amount + asset.amount));
                     asset.amount += parseFloat(req.body.amount);
+                    user.balance -= parseFloat(req.body.investedValue);
                     await asset.save();
+                    const order = new Order({
+                        coinName: req.body.coinName,
+                        amount: req.body.amount,
+                        investedValue: req.body.investedValue,
+                        orderCompleted: true,
+                        type: "Buy",
+                        timePlaced: req.body.timePlaced,
+                        timeExecuted: new Date(),
+                        user: req.user._id,
+                    });
+                    user.orders.push(order._id);
+                    await user.save();
                     res.send("Asset Added");
                     return;
                 }
             }
-            console.log("hey");
+            console.log("Don't have this coin");
             const asset = new Asset({
                 coinName: req.body.coinName,
                 amount: parseFloat(req.body.amount),
                 avgPrice: parseFloat(req.body.price),
             });
             asset.users.push(req.user._id);
+            user.orders.push(order._id);
             user.assets.push(asset);
-            await asset.save();
             user.balance -= parseFloat(req.body.investedValue);
+            await asset.save();
             await user.save();
+        }
+        else {
+            res.send("Not enough money");
         }
 
     }
 });
+app.get("/limit/:coinName", async (req, res) => {
+    if (req.user) {
+        const orders = await Order.find({ user: req.user._id });
+        const sendOrders = [];
+        for (let i = 0; i < orders.length; i++) {
+            if (orders[i].coinName === req.params.coinName) {
+                sendOrders.push(orders[i]);
+            }
+        }
+        const sortedOrders = sendOrders.sort((a, b) => {
+            return b.price - a.price;
+        });
+        //console.log(sendOrders);
+        console.log("Sorted Orders Sent");
+        res.send(sortedOrders);
+    }
+})
+app.post("/limit", async (req, res) => {
+
+    if (req.user) {
+        const user = await User.findOne({ username: req.user.username }).populate('assets');
+        if (req.body.type === "Buy") {
+            if (parseFloat(req.body.investedValue) <= parseFloat(user.balance)) {
+                const order = new Order({
+                    coinName: req.body.coinName,
+                    price: parseFloat(req.body.price),
+                    amount: parseFloat(req.body.amount),
+                    investedValue: parseFloat(req.body.investedValue),
+                    type: req.body.type,
+                    timePlaced: req.body.timePlaced,
+                    timeExecuted: req.body.timeExecuted,
+                    orderCompleted: req.body.orderCompleted,
+                    user: req.user._id,
+                });
+                await order.save();
+            }
+            else {
+                res.send("Not enough money");
+            }
+        }
+        else if (req.body.type === "Sell") {
+            for (let i = 0; i < user.assets.length; i++) {
+                if (user.assets[i].coinName === req.body.coinName) {
+                    const asset = await Asset.findOne({ coinName: req.body.coinName });
+                    if (parseFloat(req.body.sellMoney) <= parseFloat(asset.amount * req.body.investedValue)) {
+                        const order = new Order({
+                            coinName: req.body.coinName,
+                            amount: parseFloat(req.body.amount),
+                            price: parseFloat(req.body.price),
+                            investedValue: parseFloat(req.body.investedValue),
+                            type: req.body.type,
+                            timePlaced: req.body.timePlaced,
+                            timeExecuted: req.body.timeExecuted,
+                            orderCompleted: req.body.orderCompleted,
+                            user: req.user._id,
+                        });
+                        await order.save();
+                    }
+                    else {
+                        res.send("Not enough amount");
+                        return;
+                    }
+                }
+            }
+        }
+    }
+    else {
+        res.send("Not logged in");
+    }
+})
 app.post("/sell", async (req, res) => {
     if (req.user) {
         const user = await User.findOne({ username: req.user.username }).populate('assets');;
@@ -141,9 +263,22 @@ app.post("/sell", async (req, res) => {
             if (user.assets[i].coinName === req.body.coinName) {
                 const asset = await Asset.findOne({ coinName: req.body.coinName });
                 if (parseFloat(req.body.sellMoney) <= parseFloat(asset.amount * req.body.price)) {
+                    //average prie doesn't change when you sell
                     asset.amount -= parseFloat(req.body.sellMoney / req.body.price);
-                    asset.avgPrice = ((parseFloat(asset.avgPrice * asset.amount) - parseFloat(req.body.sellMoney)) / (asset.amount - req.body.amount));
                     user.balance += parseFloat(req.body.sellMoney);
+                    await asset.save();
+                    const order = new Order({
+                        coinName: req.body.coinName,
+                        amount: req.body.amount,
+                        investedValue: req.body.investedValue,
+                        orderCompleted: true,
+                        type: "Buy",
+                        timePlaced: req.body.timePlaced,
+                        timeExecuted: new Date(),
+                        user: req.user._id,
+                    });
+                    user.orders.push(order._id);
+                    await user.save();
                     res.send("Asset Sold");
                     return;
                 }
@@ -156,6 +291,21 @@ app.post("/sell", async (req, res) => {
         res.send("No such asset");
     }
 });
+app.get('/leaderboard', async (req, res) => {
+    const users = await User.find().populate('assets');
+    for (let i = 0; i < users.length; i++) {
+        users[i].currentValue = users[i].balance;
+        for (let j = 0; j < users[i].assets.length; j++) {
+            users[i].currentValue += users[i].assets[j].amount * users[i].assets[j].avgPrice;
+        }
+
+        await users[i].save();
+    }
+    const sortedUsers = users.sort((a, b) => {
+        return b.currentValue - a.currentValue;
+    });
+    res.send(sortedUsers);
+});
 app.get("/assets", async (req, res) => {
     if (req.user) {
         const user = await User.findOne({ username: req.user.username }).populate('assets');
@@ -166,10 +316,88 @@ app.get("/assets", async (req, res) => {
     }
 
 })
+
+//---------------limit orders-----------------
+// const LimitOrderExecute = async (order) => {
+//     if (order.type == "Buy") {
+//         const user = await User.findOne({ _id: order.user }).populate('assets');;
+//         if (parseFloat(order.investedValue) <= parseFloat(user.balance)) {
+//             console.log("enough money");
+//             for (let i = 0; i < user.assets.length; i++) {
+//                 console.log(user.assets[i].coinName);
+//                 if (user.assets[i].coinName === order.coinName) {
+//                     console.log("already have this coin");
+//                     const asset = await Asset.findOne({ coinName: order.coinName });
+//                     asset.avgPrice = ((parseFloat(asset.avgPrice * asset.amount) + parseFloat(order.investedValue)) / (order.amount + asset.amount));
+//                     asset.amount += parseFloat(order.amount);
+//                     user.balance -= parseFloat(order.investedValue);
+//                     await asset.save();
+//                     order.orderCompleted = true,
+//                         order.timeExecuted = new Date(),
+//                         user.orders.push(order._id);
+//                     await order.save();
+//                     await user.save();
+//                     console.log("Asset Added");
+//                     return;
+//                 }
+//             }
+//             console.log("Don't have this coin");
+//             const asset = new Asset({
+//                 coinName: req.body.coinName,
+//                 amount: parseFloat(req.body.amount),
+//                 avgPrice: parseFloat(req.body.price),
+//             });
+//             asset.users.push(req.user._id);
+//             user.orders.push(order._id);
+//             user.assets.push(asset);
+//             user.balance -= parseFloat(req.body.investedValue);
+//             await asset.save();
+//             await user.save();
+//         }
+//         else {
+//             console.log(order.coinName);
+//             console.log("Not enough Money")
+//             return;
+//         }
+
+
+//     }
+// }
+// const LimitOrderCheck = async () => {
+//     const orders = Order.find({ orderCompleted: false });
+//     const { data } = await axios.get(`https://api.coingecko.com/api/v3/coins/markets?vs_currency=${"USD"}&order=market_cap_desc&per_page=100&page=1&sparkline=false`)
+//         .catch((err) => {
+//             console.log(err);
+//         });
+//     for (let i = 0; i < data.length; ++i) {
+//         const coin = data[i];
+//         const coinName = data[i].id;
+//         const ordersCheck = (await orders).filter((order) => {
+//             return order.coinName.toLowerCase().includes(coinName)
+//         });
+//         for (let j = 0; j < ordersCheck.length; ++j) {
+//             if (ordersCheck[j].type == "Buy") {
+//                 if (ordersCheck[i].price <= coin.current_price) {
+//                     LimitOrderExecute(ordersCheck[i]);
+//                 }
+//             }
+//             else if (ordersCheck[j].type == "Sell") {
+//                 if (ordersCheck[i].price >= coin.current_price) {
+//                     LimitOrderExecute(ordersCheck[i]);
+//                 }
+//             }
+//         }
+//     }
+// }
+
+// LimitOrderCheck();
+
+
 //------------------routes------------------
 app.get('/', (req, res) => {
     res.send("hello world !");
 })
 app.listen(PORT, () => {
-    console.log('Server is running on port 3000');
+    console.log(`Server is running on ${PORT}`);
 });
+
