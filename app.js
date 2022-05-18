@@ -14,7 +14,7 @@ const app = express()
 app.use(express.urlencoded({ extended: true }));
 app.use(methodOverride('_method'));
 app.use(bodyParser.json())
-const PORT = 5000
+const PORT = process.env.PORT || 5000
 const cors = require("cors");
 
 //----------------------
