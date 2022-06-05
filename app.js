@@ -34,6 +34,8 @@ db.on("error", console.error.bind(console, "connection error:"));
 db.once("open", () => {
     console.log("Database connected");
 });
+
+
 //------session config--------
 app.use(
     cors({
@@ -64,258 +66,264 @@ app.use((req, res, next) => {
     res.locals.currentUser = req.user;
     next();
 })
-
+//-----router config--------
+const tradesRouter = require('./routes/trades');
+const usersRouter = require('./routes/users');
+//-----routes--------
+app.use('/', usersRouter);
+app.use('/trade', tradesRouter);
 //------------------auth------------------
-app.post("/login", (req, res, next) => {
-    passport.authenticate("local", (err, user, info) => {
-        if (err) throw err;
-        if (!user) res.send("No User Exists");
-        else {
-            req.logIn(user, (err) => {
-                if (err) throw err;
-                res.send({
-                    success: true,
-                    username: user.username,
-                });
-                console.log(req.user);
-            });
-        }
-    })(req, res, next);
-});
-app.post("/register", (req, res) => {
-    User.findOne({ username: req.body.username }, async (err, doc) => {
-        if (err) throw err;
-        if (doc) res.send("User Already Exists");
-        if (!doc) {
-            const hashedPassword = await bcrypt.hash(req.body.password, 10);
+// app.post("/login", (req, res, next) => {
+//     passport.authenticate("local", (err, user, info) => {
+//         if (err) throw err;
+//         if (!user) res.send("No User Exists");
+//         else {
+//             req.logIn(user, (err) => {
+//                 if (err) throw err;
+//                 res.send({
+//                     success: true,
+//                     username: user.username,
+//                 });
+//                 console.log(req.user);
+//             });
+//         }
+//     })(req, res, next);
+// });
+// app.post("/register", (req, res) => {
+//     User.findOne({ username: req.body.username }, async (err, doc) => {
+//         if (err) throw err;
+//         if (doc) res.send("User Already Exists");
+//         if (!doc) {
+//             const hashedPassword = await bcrypt.hash(req.body.password, 10);
 
-            const newUser = new User({
-                username: req.body.username,
-                password: hashedPassword,
-                email: req.body.email,
-                balance: 100000,
-                currentValue: 100000,
-            });
-            await newUser.save();
-            res.send("User Created");
-        }
-    });
-});
-app.get("/user", async (req, res) => {
-    if (req.user) {
+//             const newUser = new User({
+//                 username: req.body.username,
+//                 password: hashedPassword,
+//                 email: req.body.email,
+//                 balance: 100000,
+//                 currentValue: 100000,
+//             });
+//             await newUser.save();
+//             res.send("User Created");
+//         }
+//     });
+// });
+// app.get("/user", async (req, res) => {
+//     if (req.user) {
 
-        const user = await User.findOne({ _id: req.user._id }).populate('assets');
-        for (let i = 0; i < user.length; i++) {
-            user[i].currentValue = user[i].balance;
-            for (let j = 0; j < user[i].assets.length; j++) {
-                user[i].currentValue += user[i].assets[j].amount * user[i].assets[j].avgPrice;
-            }
-            await user[i].save();
-        }
-        console.log(user);
-        res.send({
-            loggedIn: true,
-            username: user.username,
-            assets: user.assets,
-            orders: user.orders,
-            balance: user.balance,
-            currentValue: user.currentValue,
-        })
-    }
-    else {
-        res.send({
-            loggedIn: false,
-        })
-    }
-    // The req.user stores the entire user that has been authenticated inside of it.
-});
-app.get('/logout', (req, res) => {
-    req.logout(); //passport function
-    res.redirect('https://main--virtual-crypto-trader.netlify.app/');
-    //res.redirect('http://localhost:3000/'); //"https://main--iridescent-basbousa-14f4a4.netlify.app",
+//         const user = await User.findOne({ _id: req.user._id }).populate('assets');
+//         for (let i = 0; i < user.length; i++) {
+//             user[i].currentValue = user[i].balance;
+//             for (let j = 0; j < user[i].assets.length; j++) {
+//                 user[i].currentValue += user[i].assets[j].amount * user[i].assets[j].avgPrice;
+//             }
+//             await user[i].save();
+//         }
+//         console.log(user);
+//         res.send({
+//             loggedIn: true,
+//             username: user.username,
+//             assets: user.assets,
+//             orders: user.orders,
+//             balance: user.balance,
+//             currentValue: user.currentValue,
+//         })
+//     }
+//     else {
+//         res.send({
+//             loggedIn: false,
+//         })
+//     }
+//     // The req.user stores the entire user that has been authenticated inside of it.
+// });
+// app.get('/logout', (req, res) => {
+//     req.logout(); //passport function
+//     res.redirect('https://main--virtual-crypto-trader.netlify.app/');
+//     //res.redirect('http://localhost:3000/'); //"https://main--iridescent-basbousa-14f4a4.netlify.app",
 
-})
+// })
 //------------buy and sell----------------
-app.post("/buy", async (req, res) => {
-    console.log(req.user, req.body);
-    if (req.user) {
-        const user = await User.findOne({ username: req.user.username }).populate('assets');;
-        if (parseFloat(req.body.investedValue) <= parseFloat(user.balance)) {
-            console.log("enough money");
-            for (let i = 0; i < user.assets.length; i++) {
-                console.log(user.assets[i].coinName);
-                if (user.assets[i].coinName === req.body.coinName) {
-                    console.log("already have this coin");
-                    const asset = await Asset.findOne({ coinName: req.body.coinName });
-                    asset.avgPrice = ((parseFloat(asset.avgPrice * asset.amount) + parseFloat(req.body.investedValue)) / (req.body.amount + asset.amount));
-                    asset.amount += parseFloat(req.body.amount);
-                    user.balance -= parseFloat(req.body.investedValue);
-                    await asset.save();
-                    const order = new Order({
-                        coinName: req.body.coinName,
-                        amount: req.body.amount,
-                        investedValue: req.body.investedValue,
-                        orderCompleted: true,
-                        type: "Buy",
-                        timePlaced: req.body.timePlaced,
-                        timeExecuted: new Date(),
-                        user: req.user._id,
-                    });
-                    user.orders.push(order._id);
-                    await user.save();
-                    res.send("Asset Added");
-                    return;
-                }
-            }
-            console.log("Don't have this coin");
-            const asset = new Asset({
-                coinName: req.body.coinName,
-                amount: parseFloat(req.body.amount),
-                avgPrice: parseFloat(req.body.price),
-            });
-            asset.users.push(req.user._id);
-            user.orders.push(order._id);
-            user.assets.push(asset);
-            user.balance -= parseFloat(req.body.investedValue);
-            await asset.save();
-            await user.save();
-        }
-        else {
-            res.send("Not enough money");
-        }
+// app.post("/buy", async (req, res) => {
+//     console.log(`1`, req.user, req.body);
+//     if (req.user) {
+//         const user = await User.findOne({ username: req.user.username }).populate('assets');;
+//         if (parseFloat(req.body.investedValue) <= parseFloat(user.balance)) {
+//             console.log("enough money");
+//             for (let i = 0; i < user.assets.length; i++) {
+//                 console.log(user.assets[i].coinName);
+//                 if (user.assets[i].coinName === req.body.coinName) {
+//                     console.log("already have this coin");
+//                     const asset = await Asset.findOne({ coinName: req.body.coinName });
+//                     asset.avgPrice = ((parseFloat(asset.avgPrice * asset.amount) + parseFloat(req.body.investedValue)) / (req.body.amount + asset.amount));
+//                     asset.amount += parseFloat(req.body.amount);
+//                     user.balance -= parseFloat(req.body.investedValue);
+//                     await asset.save();
+//                     const order = new Order({
+//                         coinName: req.body.coinName,
+//                         amount: req.body.amount,
+//                         investedValue: req.body.investedValue,
+//                         orderCompleted: true,
+//                         type: "Buy",
+//                         timePlaced: req.body.timePlaced,
+//                         timeExecuted: new Date(),
+//                         user: req.user._id,
+//                     });
+//                     user.orders.push(order._id);
+//                     await user.save();
+//                     res.send("Asset Added");
+//                     // return;
+//                 }
+//             }
+//             console.log("Don't have this coin");
+//             const asset = new Asset({
+//                 coinName: req.body.coinName,
+//                 amount: parseFloat(req.body.amount),
+//                 avgPrice: parseFloat(req.body.price),
+//             });
+//             asset.users.push(req.user._id);
+//             user.orders.push(order._id);
+//             user.assets.push(asset);
+//             user.balance -= parseFloat(req.body.investedValue);
+//             await asset.save();
+//             await user.save();
+//         }
+//         else {
+//             res.send("Not enough money");
+//         }
 
-    }
-});
-app.get("/limit/:coinName", async (req, res) => {
-    if (req.user) {
-        const orders = await Order.find({ user: req.user._id });
-        const sendOrders = [];
-        for (let i = 0; i < orders.length; i++) {
-            if (orders[i].coinName === req.params.coinName) {
-                sendOrders.push(orders[i]);
-            }
-        }
-        const sortedOrders = sendOrders.sort((a, b) => {
-            return b.price - a.price;
-        });
-        //console.log(sendOrders);
-        console.log("Sorted Orders Sent");
-        res.send(sortedOrders);
-    }
-})
-app.post("/limit", async (req, res) => {
+//     }
+// });
+// //limit Orders
+// app.get("/limit/:coinName", async (req, res) => {
+//     if (req.user) {
+//         const orders = await Order.find({ user: req.user._id });
+//         const sendOrders = [];
+//         for (let i = 0; i < orders.length; i++) {
+//             if (orders[i].coinName === req.params.coinName) {
+//                 sendOrders.push(orders[i]);
+//             }
+//         }
+//         const sortedOrders = sendOrders.sort((a, b) => {
+//             return b.price - a.price;
+//         });
+//         //console.log(sendOrders);
+//         console.log("Sorted Orders Sent");
+//         res.send(sortedOrders);
+//     }
+// })
+// app.post("/limit", async (req, res) => {
 
-    if (req.user) {
-        const user = await User.findOne({ username: req.user.username }).populate('assets');
-        if (req.body.type === "Buy") {
-            if (parseFloat(req.body.investedValue) <= parseFloat(user.balance)) {
-                const order = new Order({
-                    coinName: req.body.coinName,
-                    price: parseFloat(req.body.price),
-                    amount: parseFloat(req.body.amount),
-                    investedValue: parseFloat(req.body.investedValue),
-                    type: req.body.type,
-                    timePlaced: req.body.timePlaced,
-                    timeExecuted: req.body.timeExecuted,
-                    orderCompleted: req.body.orderCompleted,
-                    user: req.user._id,
-                });
-                await order.save();
-            }
-            else {
-                res.send("Not enough money");
-            }
-        }
-        else if (req.body.type === "Sell") {
-            for (let i = 0; i < user.assets.length; i++) {
-                if (user.assets[i].coinName === req.body.coinName) {
-                    const asset = await Asset.findOne({ coinName: req.body.coinName });
-                    if (parseFloat(req.body.sellMoney) <= parseFloat(asset.amount * req.body.investedValue)) {
-                        const order = new Order({
-                            coinName: req.body.coinName,
-                            amount: parseFloat(req.body.amount),
-                            price: parseFloat(req.body.price),
-                            investedValue: parseFloat(req.body.investedValue),
-                            type: req.body.type,
-                            timePlaced: req.body.timePlaced,
-                            timeExecuted: req.body.timeExecuted,
-                            orderCompleted: req.body.orderCompleted,
-                            user: req.user._id,
-                        });
-                        await order.save();
-                    }
-                    else {
-                        res.send("Not enough amount");
-                        return;
-                    }
-                }
-            }
-        }
-    }
-    else {
-        res.send("Not logged in");
-    }
-})
-app.post("/sell", async (req, res) => {
-    if (req.user) {
-        const user = await User.findOne({ username: req.user.username }).populate('assets');;
-        for (let i = 0; i < user.assets.length; i++) {
-            if (user.assets[i].coinName === req.body.coinName) {
-                const asset = await Asset.findOne({ coinName: req.body.coinName });
-                if (parseFloat(req.body.sellMoney) <= parseFloat(asset.amount * req.body.price)) {
-                    //average prie doesn't change when you sell
-                    asset.amount -= parseFloat(req.body.sellMoney / req.body.price);
-                    user.balance += parseFloat(req.body.sellMoney);
-                    await asset.save();
-                    const order = new Order({
-                        coinName: req.body.coinName,
-                        amount: req.body.amount,
-                        investedValue: req.body.investedValue,
-                        orderCompleted: true,
-                        type: "Buy",
-                        timePlaced: req.body.timePlaced,
-                        timeExecuted: new Date(),
-                        user: req.user._id,
-                    });
-                    user.orders.push(order._id);
-                    await user.save();
-                    res.send("Asset Sold");
-                    return;
-                }
-                else {
-                    res.send("Not enough amount");
-                    return;
-                }
-            }
-        }
-        res.send("No such asset");
-    }
-});
-app.get('/leaderboard', async (req, res) => {
-    const users = await User.find().populate('assets');
-    for (let i = 0; i < users.length; i++) {
-        users[i].currentValue = users[i].balance;
-        for (let j = 0; j < users[i].assets.length; j++) {
-            users[i].currentValue += users[i].assets[j].amount * users[i].assets[j].avgPrice;
-        }
+//     if (req.user) {
+//         const user = await User.findOne({ username: req.user.username }).populate('assets');
+//         if (req.body.type === "Buy") {
+//             if (parseFloat(req.body.investedValue) <= parseFloat(user.balance)) {
+//                 const order = new Order({
+//                     coinName: req.body.coinName,
+//                     price: parseFloat(req.body.price),
+//                     amount: parseFloat(req.body.amount),
+//                     investedValue: parseFloat(req.body.investedValue),
+//                     type: req.body.type,
+//                     timePlaced: req.body.timePlaced,
+//                     timeExecuted: req.body.timeExecuted,
+//                     orderCompleted: req.body.orderCompleted,
+//                     user: req.user._id,
+//                 });
+//                 await order.save();
+//             }
+//             else {
+//                 res.send("Not enough money");
+//             }
+//         }
+//         else if (req.body.type === "Sell") {
+//             for (let i = 0; i < user.assets.length; i++) {
+//                 if (user.assets[i].coinName === req.body.coinName) {
+//                     const asset = await Asset.findOne({ coinName: req.body.coinName });
+//                     if (parseFloat(req.body.sellMoney) <= parseFloat(asset.amount * req.body.investedValue)) {
+//                         const order = new Order({
+//                             coinName: req.body.coinName,
+//                             amount: parseFloat(req.body.amount),
+//                             price: parseFloat(req.body.price),
+//                             investedValue: parseFloat(req.body.investedValue),
+//                             type: req.body.type,
+//                             timePlaced: req.body.timePlaced,
+//                             timeExecuted: req.body.timeExecuted,
+//                             orderCompleted: req.body.orderCompleted,
+//                             user: req.user._id,
+//                         });
+//                         await order.save();
+//                     }
+//                     else {
+//                         res.send("Not enough amount");
+//                         return;
+//                     }
+//                 }
+//             }
+//         }
+//     }
+//     else {
+//         res.send("Not logged in");
+//     }
+// })
+// app.post("/sell", async (req, res) => {
+//     if (req.user) {
+//         const user = await User.findOne({ username: req.user.username }).populate('assets');;
+//         for (let i = 0; i < user.assets.length; i++) {
+//             if (user.assets[i].coinName === req.body.coinName) {
+//                 const asset = await Asset.findOne({ coinName: req.body.coinName });
+//                 if (parseFloat(req.body.sellMoney) <= parseFloat(asset.amount * req.body.price)) {
+//                     //average prie doesn't change when you sell
+//                     asset.amount -= parseFloat(req.body.sellMoney / req.body.price);
+//                     user.balance += parseFloat(req.body.sellMoney);
+//                     await asset.save();
+//                     const order = new Order({
+//                         coinName: req.body.coinName,
+//                         amount: req.body.amount,
+//                         investedValue: req.body.investedValue,
+//                         orderCompleted: true,
+//                         type: "Buy",
+//                         timePlaced: req.body.timePlaced,
+//                         timeExecuted: new Date(),
+//                         user: req.user._id,
+//                     });
+//                     user.orders.push(order._id);
+//                     await user.save();
+//                     res.send("Asset Sold");
+//                     return;
+//                 }
+//                 else {
+//                     res.send("Not enough amount");
+//                     return;
+//                 }
+//             }
+//         }
+//         res.send("No such asset");
+//     }
+// });
+// app.get('/leaderboard', async (req, res) => {
+//     const users = await User.find().populate('assets');
+//     for (let i = 0; i < users.length; i++) {
+//         users[i].currentValue = users[i].balance;
+//         for (let j = 0; j < users[i].assets.length; j++) {
+//             users[i].currentValue += users[i].assets[j].amount * users[i].assets[j].avgPrice;
+//         }
 
-        await users[i].save();
-    }
-    const sortedUsers = users.sort((a, b) => {
-        return b.currentValue - a.currentValue;
-    });
-    res.send(sortedUsers);
-});
-app.get("/assets", async (req, res) => {
-    if (req.user) {
-        const user = await User.findOne({ username: req.user.username }).populate('assets');
-        if (!user) {
-            res.send("Shit website no one has assets ")
-        }
-        res.send(user);
-    }
+//         await users[i].save();
+//     }
+//     const sortedUsers = users.sort((a, b) => {
+//         return b.currentValue - a.currentValue;
+//     });
+//     res.send(sortedUsers);
+// });
+// app.get("/assets", async (req, res) => {
+//     if (req.user) {
+//         const user = await User.findOne({ username: req.user.username }).populate('assets');
+//         if (!user) {
+//             res.send("Shit website no one has assets ")
+//         }
+//         res.send(user);
+//     }
 
-})
+// })
 
 //---------------limit orders-----------------
 // const LimitOrderExecute = async (order) => {
