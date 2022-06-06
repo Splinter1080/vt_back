@@ -109,7 +109,7 @@ module.exports.user = async (req, res, next) => {
 module.exports.logout = async (req, res, next) => {
     try {
         req.logout(); //passport function
-        res.redirect('http://localhost:3000/');
+        res.redirect('https://virtual-crypto-trader.netlify.app/');
     } catch (error) {
         console.log(error);
     }
