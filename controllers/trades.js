@@ -5,6 +5,7 @@ const Order = require('../models/orders');
 module.exports.buy = async (req, res) => {
     try {
         if (req.user) {
+            console.log("Buy working?");
             const user = await User.findOne({ username: req.user.username }).populate('assets');;
             if (parseFloat(req.body.investedValue) <= parseFloat(user.balance)) {
                 console.log("enough money");
@@ -30,6 +31,7 @@ module.exports.buy = async (req, res) => {
                         user.orders.push(order._id);
                         await user.save();
                         res.status(200).send("Asset Added");
+                        return;
                     }
                 }
                 console.log("Don't have this coin");
@@ -38,17 +40,31 @@ module.exports.buy = async (req, res) => {
                     amount: parseFloat(req.body.amount),
                     avgPrice: parseFloat(req.body.price),
                 });
+                const order = new Order({
+                    coinName: req.body.coinName,
+                    amount: req.body.amount,
+                    investedValue: req.body.investedValue,
+                    orderCompleted: true,
+                    type: "Buy",
+                    timePlaced: req.body.timePlaced,
+                    timeExecuted: new Date(),
+                    user: req.user._id,
+                });
                 asset.users.push(req.user._id);
                 user.orders.push(order._id);
                 user.assets.push(asset);
                 user.balance -= parseFloat(req.body.investedValue);
                 await asset.save();
                 await user.save();
+                res.status(200).send("Asset Added");
             }
             else {
                 res.status(400).send("Not enough money");
             }
 
+        }
+        else {
+            res.status(400).send("Not logged in");
         }
     }
     catch (err) {
@@ -72,8 +88,12 @@ module.exports.limitOrders = async (req, res) => {
             console.log("Sorted Orders Sent");
             res.status(200).send(sortedOrders);
         }
+        else {
+            res.status(400).send("Not logged in");
+        }
     } catch (error) {
         console.log(error);
+        res.status(400).send(error.message);
     }
 
 }
@@ -133,6 +153,7 @@ module.exports.limit = async (req, res) => {
         }
     } catch (error) {
         console.log(error);
+        res.status(400).send(error.message);
     }
 
 }
@@ -161,19 +182,23 @@ module.exports.sell = async (req, res) => {
                         });
                         user.orders.push(order._id);
                         await user.save();
-                        res.send("Asset Sold");
+                        res.status(200).send("Asset Sold");
                         return;
                     }
                     else {
-                        res.send("Not enough amount");
+                        res.status(400).send("Not enough amount");
                         return;
                     }
                 }
             }
-            res.send("No such asset");
+            res.status(400).send("No such asset");
+        }
+        else {
+            res.status(400).send("Not logged in");
         }
     } catch (error) {
         console.log(error);
+        res.status(400).send(error.message);
     }
 
 }
@@ -208,7 +233,11 @@ module.exports.assets = async (req, res) => {
             }
             res.status(200).send(user);
         }
+        else {
+            res.status(400).send("Not logged in");
+        }
     } catch (error) {
         console.log(error);
+        res.status(400).send(error.message);
     }
 }

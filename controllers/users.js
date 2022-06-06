@@ -4,8 +4,10 @@ const Order = require('../models/orders');
 const passport = require('passport')
 const passportLocal = require("passport-local").Strategy;
 const session = require('express-session');
-
+const bcrypt = require("bcryptjs");
+const axios = require("axios");
 module.exports.register = async (req, res) => {
+
     try {
         console.log(req.body.username, req.body.password, req.body.email);
         const { username, password, email } = req.body;
@@ -17,7 +19,8 @@ module.exports.register = async (req, res) => {
 
         const oldUser = await User.findOne({ email });
         if (oldUser) {
-            return res.status(409).send("User Already Exist. Please Login");
+            console.log("User already exists");
+            res.status(409).send("User Already Exist. Please Login");
         }
         // create new user
         User.findOne({ username: req.body.username }, async (err, doc) => {
