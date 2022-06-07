@@ -62,6 +62,8 @@ module.exports.login = async (req, res, next) => {
                     res.send({
                         success: true,
                         username: user.username,
+                        email: user.email,
+                        _id: user._id,
                     });
                     console.log(req.user);
                 });
@@ -75,8 +77,8 @@ module.exports.login = async (req, res, next) => {
 
 module.exports.user = async (req, res, next) => {
     try {
-        console.log("user Working?", req.user);
-        if (req.user) {
+        console.log(req.isAuthenticated, req.user);
+        if (req.isAuthenticated) {
             const user = await User.findOne({ _id: req.user._id }).populate('assets');
             for (let i = 0; i < user.length; i++) {
                 user[i].currentValue = user[i].balance;
