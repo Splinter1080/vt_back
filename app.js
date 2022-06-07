@@ -65,7 +65,6 @@ app.use(passport.session());
 require("./passportConfig")(passport);
 app.use((req, res, next) => {
     res.locals.currentUser = req.user;
-    console.log("lol?");
     next();
 })
 //-----router config--------
