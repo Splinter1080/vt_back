@@ -4,9 +4,9 @@ const Order = require('../models/orders');
 
 module.exports.buy = async (req, res) => {
     try {
-        if (req.user) {
+        if (req.query.user_id) {
             console.log("Buy working?");
-            const user = await User.findOne({ username: req.user.username }).populate('assets');;
+            const user = await User.findOne({ _id: req.query.user_id }).populate('assets');;
             if (parseFloat(req.body.investedValue) <= parseFloat(user.balance)) {
                 console.log("enough money");
                 for (let i = 0; i < user.assets.length; i++) {
@@ -74,8 +74,8 @@ module.exports.buy = async (req, res) => {
 
 module.exports.limitOrders = async (req, res) => {
     try {
-        if (req.user) {
-            const orders = await Order.find({ user: req.user._id });
+        if (req.query.user_id) {
+            const orders = await Order.find({ user: req.query.user_id });
             const sendOrders = [];
             for (let i = 0; i < orders.length; i++) {
                 if (orders[i].coinName === req.params.coinName) {
@@ -100,8 +100,8 @@ module.exports.limitOrders = async (req, res) => {
 
 module.exports.limit = async (req, res) => {
     try {
-        if (req.user) {
-            const user = await User.findOne({ username: req.user.username }).populate('assets');
+        if (req.query.user_id) {
+            const user = await User.findOne({ _id: req.query.user_id }).populate('assets');
             if (req.body.type === "Buy") {
                 if (parseFloat(req.body.investedValue) <= parseFloat(user.balance)) {
                     const order = new Order({
@@ -160,8 +160,8 @@ module.exports.limit = async (req, res) => {
 
 module.exports.sell = async (req, res) => {
     try {
-        if (req.user) {
-            const user = await User.findOne({ username: req.user.username }).populate('assets');;
+        if (req.query.user_id) {
+            const user = await User.findOne({ _id: req.query.user_id }).populate('assets');;
             for (let i = 0; i < user.assets.length; i++) {
                 if (user.assets[i].coinName === req.body.coinName) {
                     const asset = await Asset.findOne({ coinName: req.body.coinName });
@@ -226,8 +226,8 @@ module.exports.leaderboard = async (req, res) => {
 
 module.exports.assets = async (req, res) => {
     try {
-        if (req.user) {
-            const user = await User.findOne({ username: req.user.username }).populate('assets');
+        if (req.query.user_id) {
+            const user = await User.findOne({ _id: req.query.user_id }).populate('assets');
             if (!user) {
                 res.send("Shit website no one has assets ")
             }
