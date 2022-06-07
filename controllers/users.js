@@ -6,8 +6,11 @@ const passportLocal = require("passport-local").Strategy;
 const session = require('express-session');
 const bcrypt = require("bcryptjs");
 const axios = require("axios");
-module.exports.register = async (req, res) => {
 
+
+
+module.exports.register = async (req, res) => {
+    console.log(req.body);
     try {
         console.log(req.body.username, req.body.password, req.body.email);
         const { username, password, email } = req.body;
@@ -50,20 +53,22 @@ module.exports.register = async (req, res) => {
 module.exports.login = async (req, res, next) => {
     try {
         const { username, password } = req.body;
+        console.log(username, password);
         if (!(username && password)) {
             res.status(400).send("All input is required");
         }
         passport.authenticate("local", (err, user, info) => {
+            console.log("inside passport local")
             if (err) res.status(400).send("Invalid Creds");;
             if (!user) res.status(400).send("No User Exists");
             else {
                 req.logIn(user, (err) => {
                     if (err) throw err;
+                    console.log(req.user);
                     res.send({
                         success: true,
                         username: user.username,
                     });
-                    console.log(req.user);
                 });
             }
         })(req, res, next);
@@ -75,7 +80,7 @@ module.exports.login = async (req, res, next) => {
 
 module.exports.user = async (req, res, next) => {
     try {
-        if (req.user) {
+        if (req.isAuthenticated()) {
             const user = await User.findOne({ _id: req.user._id }).populate('assets');
             for (let i = 0; i < user.length; i++) {
                 user[i].currentValue = user[i].balance;

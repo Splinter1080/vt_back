@@ -52,11 +52,11 @@ const sessionConfig = {
     secret: 'thisshouldbeabettersecret!', //change this later ..
     resave: true,
     saveUninitialized: true,
-    // cookie: {
-    //     httpOnly: true,
-    //     expires: Date.now() + 1000 * 60 * 60 * 24 * 7,
-    //     maxAge: 1000 * 60 * 60 * 24 * 7
-    // }
+    cookie: {
+        httpOnly: true,
+        expires: Date.now() + 1000 * 60 * 60 * 24 * 7,
+        maxAge: 1000 * 60 * 60 * 24 * 7
+    }
 }
 app.use(session(sessionConfig));
 app.use(cookieParser("thisshouldbeabettersecret"));
@@ -65,6 +65,7 @@ app.use(passport.session());
 require("./passportConfig")(passport);
 app.use((req, res, next) => {
     res.locals.currentUser = req.user;
+    console.log("lol?");
     next();
 })
 //-----router config--------
