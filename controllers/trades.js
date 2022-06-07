@@ -26,7 +26,7 @@ module.exports.buy = async (req, res) => {
                             type: "Buy",
                             timePlaced: req.body.timePlaced,
                             timeExecuted: new Date(),
-                            user: req.user._id,
+                            user: req.query.user_id,
                         });
                         user.orders.push(order._id);
                         await user.save();
@@ -48,9 +48,9 @@ module.exports.buy = async (req, res) => {
                     type: "Buy",
                     timePlaced: req.body.timePlaced,
                     timeExecuted: new Date(),
-                    user: req.user._id,
+                    user: req.query.user_id,
                 });
-                asset.users.push(req.user._id);
+                asset.users.push(req.query.user_id);
                 user.orders.push(order._id);
                 user.assets.push(asset);
                 user.balance -= parseFloat(req.body.investedValue);
@@ -113,7 +113,7 @@ module.exports.limit = async (req, res) => {
                         timePlaced: req.body.timePlaced,
                         timeExecuted: req.body.timeExecuted,
                         orderCompleted: req.body.orderCompleted,
-                        user: req.user._id,
+                        user: req.query.user_id,
                     });
                     await order.save();
                     res.status(200).send("Limit Order Added");
@@ -136,7 +136,7 @@ module.exports.limit = async (req, res) => {
                                 timePlaced: req.body.timePlaced,
                                 timeExecuted: req.body.timeExecuted,
                                 orderCompleted: req.body.orderCompleted,
-                                user: req.user._id,
+                                user: req.query.user_id,
                             });
                             await order.save();
                             res.status(200).send("Limit Order Added");
@@ -178,7 +178,7 @@ module.exports.sell = async (req, res) => {
                             type: "Buy",
                             timePlaced: req.body.timePlaced,
                             timeExecuted: new Date(),
-                            user: req.user._id,
+                            user: req.query.user_id,
                         });
                         user.orders.push(order._id);
                         await user.save();
